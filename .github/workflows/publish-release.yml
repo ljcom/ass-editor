@@ -1,0 +1,82 @@
+name: Publish verified release artifacts
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful Build release packages run ID
+        required: true
+      tag:
+        description: Existing draft release tag (for example v0.1.1)
+        required: true
+permissions:
+  actions: read
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ inputs.tag }}
+      BUILD_RUN: ${{ inputs.run_id }}
+    steps:
+      - name: Check build and draft release
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess
+          def gh(*args):
+              return json.loads(subprocess.check_output(['gh', *args]))
+          repo, run_id, tag = os.environ['GH_REPO'], os.environ['BUILD_RUN'], os.environ['RELEASE_TAG']
+          run = gh('api', f'repos/{repo}/actions/runs/{run_id}')
+          assert run['conclusion'] == 'success', 'Build did not succeed'
+          assert run['path'] == '.github/workflows/build-release.yml', 'Unexpected build workflow'
+          release = gh('release', 'view', tag, '--json', 'isDraft,targetCommitish')
+          assert release['isDraft'], 'Release must be a draft'
+          assert release['targetCommitish'] == run['head_sha'], 'Release does not match the build commit'
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.run_id }}
+          path: artifacts
+      - name: Verify packages and consolidate checksums
+        run: |
+          python3 - <<'PY'
+          import hashlib, os, pathlib, re, shutil, zipfile
+          tag = os.environ['RELEASE_TAG']
+          assert re.fullmatch(r'v\d+\.\d+\.\d+', tag), 'Invalid release tag'
+          version = tag[1:]
+          prefix = f'Mini-ASS-Editor-{version}-'
+          expected = {
+              prefix + 'windows-x64-Setup.exe', prefix + 'win-x64.zip',
+              prefix + 'mac-arm64.dmg', prefix + 'mac-arm64.zip',
+              prefix + 'mac-x64.dmg', prefix + 'mac-x64.zip',
+          }
+          output = pathlib.Path('verified'); output.mkdir()
+          checked = {}
+          for manifest in pathlib.Path('artifacts').glob('*/SHA256SUMS.txt'):
+              for line in manifest.read_text().splitlines():
+                  checksum, name = line.split('  ', 1)
+                  assert name in expected and name not in checked, f'Unexpected or duplicate asset {name}'
+                  path = manifest.parent / name
+                  with path.open('rb') as source:
+                      actual = hashlib.file_digest(source, 'sha256').hexdigest()
+                  assert actual == checksum, f'Checksum mismatch: {name}'
+                  if name.endswith('.zip'):
+                      with zipfile.ZipFile(path) as archive:
+                          assert archive.testzip() is None, f'ZIP CRC mismatch: {name}'
+                          names = archive.namelist()
+                          assert any(n.endswith('resources/app.asar') or n.endswith('Resources/app.asar') for n in names)
+                          assert any(n.endswith('ffmpeg/ffmpeg') or n.endswith('ffmpeg/ffmpeg.exe') for n in names)
+                          assert any(n.endswith('ffmpeg.LICENSE') or n.endswith('ffmpeg.exe.LICENSE') for n in names)
+                  checked[name] = actual
+                  shutil.copyfile(path, output / name)
+          assert set(checked) == expected, 'Missing release assets'
+          (output / 'SHA256SUMS.txt').write_text(''.join(f'{checked[n]}  {n}\n' for n in sorted(checked)))
+          print('Verified all six packages, ZIP integrity, bundled FFmpeg and licenses.')
+          PY
+      - name: Upload and publish release
+        run: |
+          gh release upload "$RELEASE_TAG" verified/* --clobber
+          gh release edit "$RELEASE_TAG" --draft=false --latest
+          gh release view "$RELEASE_TAG" --json url,assets
