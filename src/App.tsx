@@ -15,6 +15,9 @@ export default function App() {
   const [time, setTime] = useState(0);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [burning, setBurning] = useState(false);
+  const [burnSeconds, setBurnSeconds] = useState(0);
+  const [burnMessage, setBurnMessage] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const [panel, setPanel] = useState(55);
@@ -83,6 +86,28 @@ export default function App() {
       setBusy(false);
     }
   };
+  const burn = async () => {
+    const s = useSubtitleStore.getState();
+    if (!video || !s.document || burning) return;
+    if (!window.desktop.burnVideo) {
+      report("Simpan edit ASS, lalu restart aplikasi untuk mengaktifkan Burn.");
+      return;
+    }
+    setBurning(true);
+    setBurnSeconds(0);
+    setBurnMessage("");
+    try {
+      const result = await window.desktop.burnVideo(
+        video.url, writeAss(s.document, s.subtitles),
+      );
+      setBurnMessage(result ? `Burn selesai: ${result.name}` : "Burn dibatalkan.");
+    } catch (e) {
+      report((e as Error).message);
+    } finally {
+      setBurning(false);
+    }
+  };
+  useEffect(() => window.desktop.onBurnProgress?.(setBurnSeconds), []);
   useEffect(() => {
     window.desktop.setDirty(store.dirty);
     document.title = `${store.name}${store.dirty ? " *" : ""} — Mini ASS Editor`;
@@ -169,7 +194,16 @@ export default function App() {
         onSubtitle={() => void openSubtitle()}
         onSave={() => void save()}
         canSave={!!store.document}
+        canBurn={!!video && !!store.document}
+        burning={burning}
+        onBurn={() => void burn()}
       />
+      {(burning || burnMessage) && (
+        <div className="burn-status" role="status">
+          {burning ? `Burning… ${Math.floor(burnSeconds / 60)}:${String(Math.floor(burnSeconds % 60)).padStart(2, "0")} diproses` : burnMessage}
+          {burning && <button onClick={() => window.desktop.cancelBurn()}>Cancel Burn</button>}
+        </div>
+      )}
       {error && (
         <div role="alert" className="error">
           {error}
@@ -260,6 +294,11 @@ export default function App() {
           onSeek={seek}
           onError={report}
           canSyncStart={!!video}
+          getVideoDuration={() =>
+            videoRef.current && Number.isFinite(videoRef.current.duration)
+              ? videoRef.current.duration
+              : undefined
+          }
           getCurrentTime={() =>
             videoRef.current && videoRef.current.readyState >= 1
               ? videoRef.current.currentTime

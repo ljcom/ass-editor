@@ -6,6 +6,9 @@ export function Toolbar({
   onSubtitle,
   onSave,
   canSave,
+  canBurn,
+  burning,
+  onBurn,
 }: {
   name: string;
   dirty: boolean;
@@ -14,6 +17,9 @@ export function Toolbar({
   onSubtitle: () => void;
   onSave: () => void;
   canSave: boolean;
+  canBurn: boolean;
+  burning: boolean;
+  onBurn: () => void;
 }) {
   return (
     <header>
@@ -29,6 +35,9 @@ export function Toolbar({
       <button onClick={onSubtitle}>Open ASS</button>
       <button className="primary" disabled={!canSave} onClick={onSave}>
         Save ASS
+      </button>
+      <button disabled={!canBurn || burning} onClick={onBurn}>
+        {burning ? "Burning…" : "Burn"}
       </button>
     </header>
   );

@@ -21,6 +21,9 @@ export interface AssDocument {
   newline: string;
 }
 export interface DesktopAPI {
+  burnVideo(url: string, content: string): Promise<{ name: string } | null>;
+  cancelBurn(): void;
+  onBurnProgress(callback: (seconds: number) => void): () => void;
   openVideo(): Promise<{ name: string; url: string } | null>;
   openSubtitle(): Promise<{ name: string; content: string } | null>;
   saveSubtitle(

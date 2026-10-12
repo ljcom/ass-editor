@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { AssDocument, Subtitle } from "../types/subtitle";
-import { validateTiming } from "../lib/timecode";
+import { formatTime, validateTiming } from "../lib/timecode";
 import { rearrangeSubtitles } from "../lib/rearrange";
 import { syncLineStart } from "../lib/syncStart";
 import { matchesSubtitle } from "../lib/search";
@@ -17,7 +17,8 @@ interface State {
   load: (doc: AssDocument, name: string) => void;
   select: (id: string, options?: { toggle?: boolean; range?: boolean }) => void;
   update: (id: string, patch: Partial<Subtitle>) => void;
-  syncStart: (id: string, time: number) => void;
+  syncStart: (id: string, time: number, videoDuration?: number) => void;
+  syncEnd: (id: string, time: number) => void;
   add: (time: number) => void;
   insert: (time: number) => void;
   remove: () => void;
@@ -115,11 +116,32 @@ export const useSubtitleStore = create<State>((set, get) => ({
     set({ subtitles: next.sort((a, b) => a.start - b.start), dirty: true });
     if (get().searchQuery) get().setSearchQuery(get().searchQuery);
   },
-  syncStart: (id, time) => {
-    const subtitles = syncLineStart(get().subtitles, id, time);
+  syncStart: (id, time, videoDuration) => {
+    const subtitles = syncLineStart(get().subtitles, id, time, videoDuration);
     set({
       subtitles: subtitles.sort((a, b) => a.start - b.start),
       dirty: true,
+      selected: id,
+      selectedIds: get().selectedIds.includes(id) ? get().selectedIds : [id],
+      selectionAnchor: get().selectedIds.includes(id)
+        ? get().selectionAnchor
+        : id,
+    });
+  },
+  syncEnd: (id, time) => {
+    const state = get();
+    const cue = state.subtitles.find((line) => line.id === id);
+    if (!cue) throw new Error("Baris subtitle tidak ditemukan.");
+    const end = Math.floor(time * 1000 + 1e-6) / 1000;
+    validateTiming(cue.start, end);
+    if (formatTime(cue.start, true) === formatTime(end, true))
+      throw new Error("Durasi terlalu pendek untuk presisi ASS (10 ms).");
+    set({
+      subtitles: state.subtitles.map((line) => line.id === id ? { ...line, end } : line),
+      dirty: true,
+      selected: id,
+      selectedIds: state.selectedIds.includes(id) ? state.selectedIds : [id],
+      selectionAnchor: state.selectedIds.includes(id) ? state.selectionAnchor : id,
     });
   },
   add: (time) => {

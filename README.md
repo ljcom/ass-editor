@@ -26,7 +26,7 @@ Panel video/tabel dapat diubah ukurannya dengan menyeret garis pemisah. Playback
 
 Dialog Open Video, Open ASS, dan Save As mengingat folder terakhir masing-masing setelah aplikasi ditutup. Riwayat disimpan lokal di folder userData Electron (`dialog-folders.json`). Cancel tidak mengganti folder; folder yang sudah dihapus dilewati. Save As mempertahankan nama file aktif sebagai saran nama dan membuka folder simpan terakhir.
 
-Di setiap baris, tombol **Set Start** di kolom Start mengambil waktu video langsung ketika diklik (pause maupun play), tanpa seek atau mengubah seleksi. End baris tepat di atasnya menurut urutan tabel saat diklik diatur 10 ms sebelum Start baru. Jika Start baru melewati End baris aktif, End ikut digeser dengan durasi semula. Jika baris lain konflik dengan rentang baris yang diklik, Start baris tersebut dipindah ke 10 ms setelah End baris yang diklik, dengan durasinya tetap. Konflik lanjutan digeser berantai sampai ada celah. Baris atas yang tidak dapat dipendekkan dengan durasi valid juga dipindah ke sesudah baris yang diklik. Timing tidak valid ditolak tanpa perubahan parsial.
+Di setiap baris, tombol **Set Start** di kolom Timing mengambil waktu video langsung ketika diklik (pause maupun play), tanpa seek atau mengubah seleksi. Baris yang Start-nya berada sebelum Start baru dan End-nya melewati Start baru dipotong End-nya menjadi 100 ms sebelum Start baru. Baris yang sudah selesai tidak diperpanjang. End baris aktif ikut bergeser dengan durasi semula. Jika baris lain konflik dengan rentang baris yang diklik, Start baris tersebut dipindah ke 10 ms setelah End baris yang diklik, dengan durasinya tetap. Konflik lanjutan digeser berantai sampai ada celah. Baris atas yang tidak dapat dipendekkan dengan durasi valid juga dipindah ke sesudah baris yang diklik. Timing tidak valid ditolak tanpa perubahan parsial.
 
 ## Search subtitle
 
@@ -70,7 +70,23 @@ npm run dist:mac
 
 Tes unit mencakup urutan Format khusus, koma, Unicode, style, override tags, roundtrip, validasi timing, tambah/hapus, serta edit dan byte-range untuk seek video lokal. `test:smoke` membutuhkan `ffmpeg` di PATH dan sesi desktop macOS untuk menguji Electron dengan video sintetis dan dialog file yang diganti secara otomatis. File pengguna tidak dipakai oleh tes.
 
-`dist:mac` menghasilkan `.app` unsigned untuk arsitektur mesin saat ini di `release/`. Signing tidak diperlukan untuk pengembangan lokal. Aplikasi unsigned yang dipindahkan/download dapat diblokir Gatekeeper; gunakan pengaturan Privacy & Security macOS untuk membuka aplikasi yang Anda percayai. Packaging Intel belum diuji.
+`dist:mac` menghasilkan DMG dan ZIP terpisah untuk macOS Apple Silicon (`arm64`) dan Intel (`x64`). `dist:win` menghasilkan installer NSIS `.exe` dan ZIP untuk Windows x64. Semua output berada di `release/` dan menggunakan versi dari `package.json`.
+
+```sh
+npm run dist:mac          # macOS arm64 + x64; jalankan pada Mac
+npm run dist:mac:arm64    # hanya Apple Silicon
+npm run dist:mac:x64      # hanya Intel
+npm run dist:win          # Windows x64
+npm run release:checksums
+```
+
+Nama paket: `Mini-ASS-Editor-0.1.0-mac-arm64.dmg`, `Mini-ASS-Editor-0.1.0-mac-x64.dmg`, ZIP macOS dengan nama serupa, `Mini-ASS-Editor-0.1.0-windows-x64-Setup.exe`, dan `Mini-ASS-Editor-0.1.0-win-x64.zip`. `SHA256SUMS.txt` mencatat checksum paket yang sudah dibuat.
+
+Pada macOS buka DMG lalu seret aplikasi ke Applications, atau ekstrak ZIP. Pada Windows jalankan installer `.exe`; alternatifnya ekstrak ZIP dan jalankan `Mini ASS Editor.exe` di dalam folder hasil ekstraksi. Semua file dalam ZIP Windows dibutuhkan, jangan hanya menyalin EXE-nya.
+
+Paket belum ditandatangani atau dinotarisasi. Gatekeeper macOS atau SmartScreen Windows dapat meminta konfirmasi saat membuka paket unsigned; gunakan mekanisme sistem untuk aplikasi yang Anda percayai. Ikon masih memakai ikon bawaan Electron. Windows dan Mac Intel perlu pengujian langsung pada perangkat target sebelum distribusi luas.
+
+Workflow `.github/workflows/build-release.yml` menyediakan build manual pada runner Windows/macOS melalui GitHub Actions (**Build release packages → Run workflow**), dengan Node 22, tes, dan upload artifact. Workflow tidak menerbitkan GitHub Release atau melakukan push otomatis. Build Windows dari macOS menonaktifkan signing/editing EXE untuk menghindari ketergantungan Wine; metadata EXE/icon menggunakan bawaan Electron. Untuk signing dan metadata khusus gunakan build Windows native dengan konfigurasi signing tersendiri.
 
 ## Batasan saat ini
 
@@ -83,4 +99,19 @@ Tes unit mencakup urutan Format khusus, koma, Unicode, style, override tags, rou
 
 ## Status verifikasi Fase 1
 
-TypeScript, 60 tes unit, smoke test pada Electron, drag slider saat playback, launch development, dan packaging `.app` arm64 berhasil diuji. Smoke test mengganti respons dialog untuk pengujian otomatis; pemilihan file melalui dialog native dan pembukaan output di IINA masih perlu diperiksa manual. `npm audit --omit=dev` bersih; audit lengkap masih melaporkan 7 temuan moderate pada rantai dependency packaging `electron-builder`.
+TypeScript, 75 tes unit, smoke test pada Electron, drag slider saat playback, launch development, dan packaging `.app` arm64 berhasil diuji. Smoke test mengganti respons dialog untuk pengujian otomatis; pemilihan file melalui dialog native dan pembukaan output di IINA masih perlu diperiksa manual. `npm audit --omit=dev` bersih; audit lengkap masih melaporkan 8 temuan moderate pada rantai dependency packaging `electron-builder`.
+
+## Verifikasi release 0.1.0
+
+Enam paket lokal (installer/ZIP Windows x64 dan DMG/ZIP macOS arm64/x64) sudah dibuat. 60 tes dan build lulus; ZIP, DMG, arsitektur executable, dan SHA-256 seluruh paket sudah diperiksa. Aplikasi dari paket macOS arm64 berhasil diluncurkan dengan UI produksi dan preload IPC. Windows dan Mac Intel belum diuji berjalan pada perangkat target. DMG Intel lokal dibuat dengan hdiutil dari bundle yang identik dengan ZIP terverifikasi setelah build standar kehabisan ruang sementara. Paket belum dipublikasikan ke GitHub.
+
+Tombol Set Start tetap tampil untuk baris di luar durasi video, termasuk timestamp dengan jumlah jam sangat panjang, dan tetap tersedia ketika Start sedang diedit. Ketika End lama melewati durasi video, Set Start memakai durasi lama yang masih wajar atau 2 detik jika durasinya melebihi panjang video; End dipotong ke akhir video bila masih ada sisa durasi minimal 10 ms. Durasi konflik yang ekstrem juga memakai 2 detik. Perbaikan dilakukan pada baris yang diatur dan baris yang konflik, lalu disimpan hanya melalui Save.
+
+Set Start yang memindahkan baris ke sebelum Start lama mempertahankan durasi semula, bukan memperpanjang hingga End lama. Bila pergeseran konflik melewati akhir video, hanya rantai yang terdampak dipadatkan secara proporsional ke sisa lagu, dengan jeda 10 ms dan durasi minimal 10 ms tiap baris. Start baris yang diklik tetap tepat pada waktu video. Setelah sort, baris tersebut disorot dan digulirkan ke tampilan.
+
+
+Tombol **Burn** tersedia setelah video dan ASS dibuka. Klik Burn, lalu pilih lokasi **Save As MP4**. Ekspor memakai seluruh subtitle pada saat tombol diklik, termasuk perubahan belum disimpan, tanpa mengikuti filter pencarian atau seleksi. Progres menampilkan waktu video yang sudah diproses; **Cancel Burn** membatalkan ekspor dan membersihkan output sementara. ASS, status perubahan, video sumber, serta posisi playback tidak berubah. Output baru dipindahkan ke lokasi tujuan setelah encoding berhasil; file sumber ditolak sebagai tujuan.
+
+Burn memakai FFmpeg dengan libass untuk style dan warna ASS, video H.264 (CRF 18), audio AAC, dan MP4 faststart. Resolusi dan timing video mengikuti sumber; font memakai font yang tersedia di sistem. FFmpeg disertakan dalam paket Windows/Mac melalui hook packaging yang memilih binary sesuai OS/arsitektur target, termasuk cross-build; lisensi dan informasi sumber binary ikut disertakan. Paket release 0.1.0 yang sudah ada belum dibangun ulang dengan fitur Burn.
+
+Di tiap baris, **Set End** mengambil waktu video saat diklik (pause/play) dan mengubah hanya End baris tersebut. Start dan baris lainnya tetap; durasi mengikuti End baru. End harus sesudah Start dan tetap valid pada presisi ASS. Tombol menyorot baris yang diklik tanpa seek atau menghentikan playback.

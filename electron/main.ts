@@ -1,6 +1,8 @@
 import { app, BrowserWindow, dialog, ipcMain, protocol, Menu } from "electron";
 import { readFile, writeFile } from "node:fs/promises";
-import { join, basename } from "node:path";
+import { join, basename, extname } from "node:path";
+import ffmpegPath from "ffmpeg-static";
+import { assertDifferentFile, burnVideo } from "./burn";
 import { videoResponse } from "./media";
 import { randomUUID } from "node:crypto";
 import { parseAss } from "../src/lib/assParser";
@@ -10,6 +12,7 @@ let dirty = false;
 let allowClose = false;
 let subtitlePath: string | undefined;
 const videos = new Map<string, string>();
+let burnController: AbortController | undefined;
 protocol.registerSchemesAsPrivileged([
   {
     scheme: "media",
@@ -110,6 +113,54 @@ app.whenReady().then(async () => {
     await folders.remember("subtitle", path);
     return { name: basename(path), content };
   });
+  ipcMain.handle("burn-video", async (event, url: unknown, content: unknown) => {
+    trusted(event);
+    if (typeof url !== "string" || typeof content !== "string")
+      throw new Error("Invalid burn request");
+    const source = videos.get(new URL(url).hostname);
+    if (!source) throw new Error("Buka video terlebih dahulu.");
+    if (burnController) throw new Error("Burn masih berjalan.");
+    parseAss(content);
+    const controller = new AbortController();
+    burnController = controller;
+    try {
+      const result = await dialog.showSaveDialog(win, {
+        title: "Burn subtitle — Save As MP4",
+        defaultPath: join(
+          (await folders.folder("save")) ?? app.getPath("videos"),
+          basename(source, extname(source)) + "-burned.mp4",
+        ),
+        filters: [{ name: "MP4 video", extensions: ["mp4"] }],
+      });
+      if (result.canceled || !result.filePath || controller.signal.aborted)
+        return null;
+      const output = /\.mp4$/i.test(result.filePath)
+        ? result.filePath : result.filePath + ".mp4";
+      await assertDifferentFile(output, [source, ...(subtitlePath ? [subtitlePath] : [])]);
+      const executable = app.isPackaged
+        ? join(process.resourcesPath, "ffmpeg", process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg")
+        : ffmpegPath;
+      if (!executable) throw new Error("FFmpeg tidak tersedia untuk perangkat ini.");
+      await burnVideo({
+        ffmpeg: executable, video: source, content, output,
+        signal: controller.signal,
+        onProgress: (seconds) => {
+          if (!win.isDestroyed()) win.webContents.send("burn-progress", seconds);
+        },
+      });
+      await folders.remember("save", output);
+      return { name: basename(output) };
+    } catch (error) {
+      if (controller.signal.aborted) return null;
+      throw error;
+    } finally {
+      burnController = undefined;
+    }
+  });
+  ipcMain.on("cancel-burn", (event) => {
+    trusted(event);
+    burnController?.abort();
+  });
   ipcMain.handle(
     "save-subtitle",
     async (event, content: unknown, saveAs: unknown) => {
@@ -164,4 +215,5 @@ app.whenReady().then(async () => {
     void win.loadURL(process.env.VITE_DEV_SERVER_URL);
   else void win.loadFile(join(__dirname, "../dist/index.html"));
 });
+app.on("before-quit", () => burnController?.abort());
 app.on("window-all-closed", () => app.quit());

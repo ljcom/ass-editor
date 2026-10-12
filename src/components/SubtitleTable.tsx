@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useLayoutEffect } from "react";
 import { useSubtitleStore } from "../store/subtitleStore";
 import { formatTime, parseTime } from "../lib/timecode";
 import { matchesSubtitle } from "../lib/search";
@@ -8,12 +8,14 @@ export function SubtitleTable({
   onError,
   getCurrentTime,
   canSyncStart,
+  getVideoDuration,
 }: {
   time: number;
   onSeek: (time: number) => void;
   onError: (message: string) => void;
   getCurrentTime: () => number | null;
   canSyncStart: boolean;
+  getVideoDuration: () => number | undefined;
 }) {
   const {
     subtitles,
@@ -23,8 +25,19 @@ export function SubtitleTable({
     update,
     remove,
     syncStart,
+    syncEnd,
     searchQuery,
   } = useSubtitleStore();
+  const rowElements = useRef(new Map<string, HTMLTableRowElement>());
+  const pendingScroll = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    if (pendingScroll.current) {
+      rowElements.current
+        .get(pendingScroll.current)
+        ?.scrollIntoView({ block: "nearest" });
+      pendingScroll.current = null;
+    }
+  }, [subtitles]);
   const [edit, setEdit] = useState<{
     id: string;
     field: "start" | "end" | "text" | "style";
@@ -69,12 +82,17 @@ export function SubtitleTable({
             <th>Duration</th>
             <th>Style</th>
             <th>Text</th>
+            <th className="line-actions-header">Timing</th>
           </tr>
         </thead>
         <tbody>
           {rows.map(({ cue, index }) => (
             <tr
               key={cue.id}
+              ref={(element) => {
+                if (element) rowElements.current.set(cue.id, element);
+                else rowElements.current.delete(cue.id);
+              }}
               aria-selected={selectedIds.includes(cue.id)}
               className={`${selectedIds.includes(cue.id) ? "selected" : ""} ${cue.start <= time && time < cue.end ? "active" : ""}`}
               onMouseDown={(e) => {
@@ -120,33 +138,12 @@ export function SubtitleTable({
                     />
                   ) : (
                     <>
-                      <span className="line-time">
+                      <span
+                        className="line-time"
+                        title={formatTime(cue[field])}
+                      >
                         {formatTime(cue[field])}
                       </span>
-                      {field === "start" && (
-                        <button
-                          className="line-set-start"
-                          aria-label={`Set start line ${index + 1}`}
-                          title="Set Start ke waktu video; baris di atas berakhir 10 ms sebelumnya, baris konflik digeser ke sesudahnya"
-                          disabled={!canSyncStart}
-                          onDoubleClick={(event) => event.stopPropagation()}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            try {
-                              const current = getCurrentTime();
-                              if (current === null)
-                                throw new Error(
-                                  "Buka video dan tunggu hingga siap diputar.",
-                                );
-                              syncStart(cue.id, current);
-                            } catch (error) {
-                              onError((error as Error).message);
-                            }
-                          }}
-                        >
-                          Set Start
-                        </button>
-                      )}
                     </>
                   )}
                 </td>
@@ -215,6 +212,54 @@ export function SubtitleTable({
                   )}
                 </td>
               ))}
+              <td className="line-actions">
+                <button
+                  className="line-set-start"
+                  aria-label={`Set start line ${index + 1}`}
+                  title="Set Start ke waktu video; baris di atas yang overlap berakhir 100 ms sebelumnya, baris konflik digeser ke sesudahnya"
+                  disabled={!canSyncStart}
+                  onDoubleClick={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    try {
+                      const current = getCurrentTime();
+                      if (current === null)
+                        throw new Error(
+                          "Buka video dan tunggu hingga siap diputar.",
+                        );
+                      pendingScroll.current = cue.id;
+                      syncStart(cue.id, current, getVideoDuration());
+                    } catch (error) {
+                      pendingScroll.current = null;
+                      onError((error as Error).message);
+                    }
+                  }}
+                >
+                  Set Start
+                </button>
+                <button
+                  className="line-set-end"
+                  aria-label={`Set end line ${index + 1}`}
+                  title="Set End ke waktu video saat ini"
+                  disabled={!canSyncStart}
+                  onDoubleClick={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    try {
+                      const current = getCurrentTime();
+                      if (current === null)
+                        throw new Error("Buka video dan tunggu hingga siap diputar.");
+                      pendingScroll.current = cue.id;
+                      syncEnd(cue.id, current);
+                    } catch (error) {
+                      pendingScroll.current = null;
+                      onError((error as Error).message);
+                    }
+                  }}
+                >
+                  Set End
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>
