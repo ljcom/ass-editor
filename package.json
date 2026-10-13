@@ -1,6 +1,6 @@
 {
   "name": "mini-ass-editor",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.cjs",
@@ -54,8 +54,12 @@
         "dmg",
         "zip"
       ],
-      "identity": null,
-      "category": "public.app-category.video"
+      "identity": "-",
+      "category": "public.app-category.video",
+      "hardenedRuntime": false,
+      "binaries": [
+        "Contents/Resources/ffmpeg/ffmpeg"
+      ]
     },
     "artifactName": "Mini-ASS-Editor-${version}-${os}-${arch}.${ext}",
     "win": {

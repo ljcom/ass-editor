@@ -30,6 +30,16 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: ${{ matrix.command }}
+      - name: Verify Mac signatures and disk images
+        if: runner.os == 'macOS'
+        run: |
+          find release -maxdepth 2 -name '*.app' -print0 | while IFS= read -r -d '' bundle; do
+            codesign --verify --deep --strict --verbose=2 "$bundle"
+            codesign --verify --strict --verbose=2 "$bundle/Contents/Resources/ffmpeg/ffmpeg"
+          done
+          for image in release/*.dmg; do
+            hdiutil verify "$image"
+          done
       - run: npm run release:checksums
       - uses: actions/upload-artifact@v4
         with:

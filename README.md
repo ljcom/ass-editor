@@ -4,20 +4,20 @@ Aplikasi desktop untuk mengedit, menyinkronkan, dan membakar subtitle ASS ke vid
 
 ## Download dan instalasi
 
-Versi terbaru: **[v0.1.1](https://github.com/ljcom/ass-editor/releases/tag/v0.1.1)**, dengan Burn MP4, Set Start, dan Set End per baris.
+Versi terbaru: **[v0.1.2](https://github.com/ljcom/ass-editor/releases/tag/v0.1.2)**, dengan Burn MP4, Set Start, dan Set End per baris.
 
 | Platform | Installer | Alternatif |
 | --- | --- | --- |
-| Windows x64 | [Setup.exe](https://github.com/ljcom/ass-editor/releases/download/v0.1.1/Mini-ASS-Editor-0.1.1-windows-x64-Setup.exe) | [ZIP portable](https://github.com/ljcom/ass-editor/releases/download/v0.1.1/Mini-ASS-Editor-0.1.1-win-x64.zip) |
-| Mac Apple Silicon | [DMG arm64](https://github.com/ljcom/ass-editor/releases/download/v0.1.1/Mini-ASS-Editor-0.1.1-mac-arm64.dmg) | [ZIP arm64](https://github.com/ljcom/ass-editor/releases/download/v0.1.1/Mini-ASS-Editor-0.1.1-mac-arm64.zip) |
-| Mac Intel | [DMG x64](https://github.com/ljcom/ass-editor/releases/download/v0.1.1/Mini-ASS-Editor-0.1.1-mac-x64.dmg) | [ZIP x64](https://github.com/ljcom/ass-editor/releases/download/v0.1.1/Mini-ASS-Editor-0.1.1-mac-x64.zip) |
+| Windows x64 | [Setup.exe](https://github.com/ljcom/ass-editor/releases/download/v0.1.2/Mini-ASS-Editor-0.1.2-windows-x64-Setup.exe) | [ZIP portable](https://github.com/ljcom/ass-editor/releases/download/v0.1.2/Mini-ASS-Editor-0.1.2-win-x64.zip) |
+| Mac Apple Silicon | [DMG arm64](https://github.com/ljcom/ass-editor/releases/download/v0.1.2/Mini-ASS-Editor-0.1.2-mac-arm64.dmg) | [ZIP arm64](https://github.com/ljcom/ass-editor/releases/download/v0.1.2/Mini-ASS-Editor-0.1.2-mac-arm64.zip) |
+| Mac Intel | [DMG x64](https://github.com/ljcom/ass-editor/releases/download/v0.1.2/Mini-ASS-Editor-0.1.2-mac-x64.dmg) | [ZIP x64](https://github.com/ljcom/ass-editor/releases/download/v0.1.2/Mini-ASS-Editor-0.1.2-mac-x64.zip) |
 
-[SHA256SUMS.txt](https://github.com/ljcom/ass-editor/releases/download/v0.1.1/SHA256SUMS.txt) memuat checksum keenam paket.
+[SHA256SUMS.txt](https://github.com/ljcom/ass-editor/releases/download/v0.1.2/SHA256SUMS.txt) memuat checksum keenam paket.
 
 - **Windows:** jalankan installer, atau ekstrak ZIP lalu buka `Mini ASS Editor.exe`. Semua file dalam folder ZIP dibutuhkan.
 - **Mac:** buka DMG lalu seret aplikasi ke Applications, atau ekstrak ZIP dan buka aplikasi.
 
-Paket belum ditandatangani dan Mac belum dinotarisasi. Windows SmartScreen atau macOS Gatekeeper mungkin meminta persetujuan saat pertama dibuka. FFmpeg sudah disertakan untuk fitur Burn; pengguna tidak perlu menginstalnya terpisah.
+Paket Windows belum ditandatangani. Paket Mac memakai signature ad-hoc dan belum dinotarisasi oleh Apple. Windows SmartScreen atau macOS Gatekeeper mungkin meminta persetujuan saat pertama dibuka. FFmpeg sudah disertakan untuk fitur Burn; pengguna tidak perlu menginstalnya terpisah.
 
 ## Mulai menggunakan
 
@@ -146,6 +146,8 @@ Paket berada di `release/` dan memakai versi dari `package.json`. Hook packaging
 GitHub Actions menyediakan dua workflow manual:
 
 1. **Build release packages** menjalankan tes dan build pada runner Windows/macOS, lalu menyimpan artifact.
+Build Mac juga memeriksa signature aplikasi/FFmpeg dan integritas DMG sebelum menyimpan artifact.
+
 2. **Publish verified release artifacts** menerima ID build yang berhasil dan tag draft release. Workflow memeriksa kecocokan commit, checksum seluruh paket, integritas ZIP, serta keberadaan FFmpeg dan lisensinya sebelum mengunggah paket dan menerbitkan release.
 
 Untuk v0.1.1, 75 tes dan build berhasil di ketiga runner. Keenam paket, checksum, dan isi ZIP sudah diverifikasi sebelum publikasi. Burn juga diuji melalui aplikasi macOS arm64 yang dipaketkan. Pengujian interaktif pada perangkat Windows dan Mac Intel masih terbatas.
@@ -159,3 +161,5 @@ Untuk v0.1.1, 75 tes dan build berhasil di ketiga runner. Keenam paket, checksum
 - Tabel belum divirtualisasi untuk file sangat besar. Ikon aplikasi masih memakai bawaan Electron.
 
 Rancangan awal proyek tersedia di [seeds/seed01.md](seeds/seed01.md).
+
+Jika macOS menolak aplikasi karena developer belum terverifikasi, coba buka aplikasi, lalu buka **System Settings → Privacy & Security → Open Anyway** untuk aplikasi yang Anda unduh dari release resmi. Jangan menonaktifkan Gatekeeper secara global. Release v0.1.2 memperbaiki signature bundle Mac yang tidak valid pada v0.1.1.
